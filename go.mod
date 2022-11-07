@@ -1,4 +1,4 @@
-module rolling-log
+module github.com/nkien0204/rolling-logger
 
 go 1.17
 
