@@ -34,4 +34,4 @@ Let take a look at `.env`:
 ## Dependencies
 - [joho/godotenv](https://github.com/joho/godotenv)
 - [uber-go/zap](https://github.com/uber-go/zap)
-- [strftime](github.com/lestrrat-go/strftime)
+- [strftime](https://github.com/lestrrat-go/strftime)
