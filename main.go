@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/nkien0204/rolling-logger/logger"
+	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/nkien0204/rolling-logger/rolling"
 )
 
 func main() {
@@ -14,9 +14,10 @@ func main() {
 		fmt.Println("load env error: ", err.Error())
 		panic(err)
 	}
-	logger := logger.New()
+	logger := rolling.New()
 	defer logger.Sync()
 
-	logger.Info("hello logger")
+	go logger.Info("hello logger")
 	logger.Error("got error")
+	time.Sleep(time.Second)
 }

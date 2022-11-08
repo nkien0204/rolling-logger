@@ -1,12 +1,14 @@
-package logger
+package rolling
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/lestrrat-go/strftime"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -22,6 +24,7 @@ type rolling struct {
 	filename     string
 	pattern      *strftime.Strftime
 	rotationTime time.Duration
+	fileWriter   *os.File
 }
 
 var logger *zap.Logger
@@ -93,16 +96,28 @@ func newRolling(filename string, rotationTime time.Duration) *rolling {
 		filename:     filename,
 		pattern:      pattern,
 		rotationTime: rotationTime,
+		fileWriter:   nil,
 	}
 }
 
 func (r *rolling) Write(p []byte) (n int, err error) {
 	base := time.Now().Truncate(r.rotationTime)
 	newFilename := r.pattern.FormatString(base)
-	file, err := os.OpenFile(newFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return 0, err
+	if r.filename != newFilename {
+		if r.fileWriter != nil {
+			r.fileWriter.Close()
+		}
+
+		dirname := filepath.Dir(newFilename)
+		if err := os.MkdirAll(dirname, 0755); err != nil {
+			return 0, errors.Wrapf(err, "failed to create directory %s", dirname)
+		}
+		r.fileWriter, err = os.OpenFile(newFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return 0, err
+		}
+		r.filename = newFilename
 	}
 
-	return file.Write(p)
+	return r.fileWriter.Write(p)
 }
