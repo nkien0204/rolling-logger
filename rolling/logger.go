@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/strftime"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,7 +29,10 @@ type rolling struct {
 var logger *zap.Logger
 var once sync.Once
 
-// Singleton pattern
+/*
+Singleton pattern.
+Create new logger for the first time.
+*/
 func New() *zap.Logger {
 	once.Do(func() {
 		logger = initLogger()
@@ -110,7 +112,7 @@ func (r *rolling) Write(p []byte) (n int, err error) {
 
 		dirname := filepath.Dir(newFilename)
 		if err := os.MkdirAll(dirname, 0755); err != nil {
-			return 0, errors.Wrapf(err, "failed to create directory %s", dirname)
+			return 0, err
 		}
 		r.fileWriter, err = os.OpenFile(newFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
