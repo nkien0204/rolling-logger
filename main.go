@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/nkien0204/rolling-logger/rolling"
@@ -17,7 +16,6 @@ func main() {
 	logger := rolling.New()
 	defer logger.Sync()
 
-	go logger.Info("hello logger")
+	logger.Info("hello logger")
 	logger.Error("got error")
-	time.Sleep(time.Second)
 }

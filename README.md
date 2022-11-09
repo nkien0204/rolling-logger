@@ -1,5 +1,5 @@
 # rolling-logger
-
+A helpful tool for separating log file by time!
 ## How to use
 ```bash
 package main
