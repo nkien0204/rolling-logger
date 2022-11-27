@@ -30,8 +30,7 @@ var logger *zap.Logger
 var once sync.Once
 
 /*
-Singleton pattern.
-Create new logger for the first time.
+Create new logger only at the first time.
 */
 func New() *zap.Logger {
 	once.Do(func() {
