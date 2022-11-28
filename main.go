@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/joho/godotenv"
 	"github.com/nkien0204/rolling-logger/rolling"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -18,4 +19,5 @@ func main() {
 
 	logger.Info("hello logger")
 	logger.Error("got error")
+	logger.Debug("this is debug")
 }

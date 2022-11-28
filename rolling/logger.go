@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,7 +13,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const DEFAULT_LOG string = "log/logger.log"
+const DEFAULT_DIR string = "log"
+const DEFAULT_INFO_NAME string = "logger.log"
+const DEFAULT_DEBUG_NAME string = "logger-debug.log"
 const (
 	DAY_ROTATION  string = "day"
 	HOUR_ROTATION string = "hour"
@@ -41,7 +44,6 @@ func New() *zap.Logger {
 
 func initLogger() *zap.Logger {
 	config := zap.Config{
-		Level:    zap.NewAtomicLevelAt(zap.InfoLevel),
 		Encoding: "json",
 		EncoderConfig: zapcore.EncoderConfig{
 			MessageKey:  "msg",
@@ -58,34 +60,71 @@ func initLogger() *zap.Logger {
 			},
 		},
 	}
-	var filenamePattern string
+	infoLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.InfoLevel
+	})
+	debugLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl < zapcore.InfoLevel
+	})
+
+	var infoFilenamePattern string
+	var debugFilenamePattern string
 	var rotationTime time.Duration
 	switch os.Getenv("LOG_ROTATION_TIME") {
 	case DAY_ROTATION:
-		filenamePattern = handleRotation("%Y-%m-%d")
+		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d")
 		rotationTime = time.Hour * 24
 	case HOUR_ROTATION:
-		filenamePattern = handleRotation("%Y-%m-%d-%H")
+		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H")
 		rotationTime = time.Hour
 	case MIN_ROTATION:
-		filenamePattern = handleRotation("%Y-%m-%d-%H-%M")
+		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H-%M")
 		rotationTime = time.Minute
 	default:
-		filenamePattern = handleRotation("%Y-%m-%d-%H")
+		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H")
 		rotationTime = time.Hour
 	}
 	core := zapcore.NewTee(
-		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(newRolling(filenamePattern, rotationTime)), zapcore.InfoLevel),
+		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(newRolling(infoFilenamePattern, rotationTime)), infoLevel),
+		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(newRolling(debugFilenamePattern, rotationTime)), debugLevel),
 	)
 	return zap.New(core, zap.AddCaller())
 }
 
-func handleRotation(timeFormat string) string {
-	pattern := os.Getenv("LOG_FILE")
-	if pattern == "" {
-		return fmt.Sprintf("%s.%s", DEFAULT_LOG, timeFormat)
+func handleRotation(timeFormat string) (infoPattern string, debugPattern string) {
+	infoDir, infoName := getPatternFromEnv("INFO")
+	infoPattern = fmt.Sprintf("%s/%s.%s", infoDir, timeFormat, infoName)
+
+	debugDir, debugName := getPatternFromEnv("DEBUG")
+	debugPattern = fmt.Sprintf("%s/%s.%s", debugDir, timeFormat, debugName)
+
+	return infoPattern, debugPattern
+}
+
+func getPatternFromEnv(level string) (dirPattern, namePattern string) {
+	switch level {
+	case "INFO":
+		dirPattern = strings.TrimSpace(os.Getenv("LOG_INFO_DIR"))
+		if dirPattern == "" {
+			dirPattern = DEFAULT_DIR
+		}
+		namePattern = strings.TrimSpace(os.Getenv("LOG_INFO_NAME"))
+		if namePattern == "" {
+			namePattern = DEFAULT_INFO_NAME
+		}
+	case "DEBUG":
+		dirPattern = strings.TrimSpace(os.Getenv("LOG_DEBUG_DIR"))
+		if dirPattern == "" {
+			dirPattern = DEFAULT_DIR
+		}
+		namePattern = strings.TrimSpace(os.Getenv("LOG_DEBUG_NAME"))
+		if namePattern == "" {
+			namePattern = DEFAULT_DEBUG_NAME
+		}
+	default:
+		// No need to handle this case right now!
 	}
-	return fmt.Sprintf("%s.%s", pattern, timeFormat)
+	return dirPattern, namePattern
 }
 
 func newRolling(filename string, rotationTime time.Duration) *rolling {
