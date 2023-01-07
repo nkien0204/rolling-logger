@@ -23,10 +23,12 @@ const (
 )
 
 type rolling struct {
-	filename     string
-	pattern      *strftime.Strftime
-	rotationTime time.Duration
-	fileWriter   *os.File
+	filename        string
+	symlinkFileName string
+	dir             string
+	pattern         *strftime.Strftime
+	rotationTime    time.Duration
+	fileWriter      *os.File
 }
 
 var logger *zap.Logger
@@ -67,41 +69,55 @@ func initLogger() *zap.Logger {
 		return lvl < zapcore.InfoLevel
 	})
 
-	var infoFilenamePattern string
-	var debugFilenamePattern string
 	var rotationTime time.Duration
+	infoRolling := initRolling()
+	debugRolling := initRolling()
+
 	switch os.Getenv("LOG_ROTATION_TIME") {
 	case DAY_ROTATION:
-		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d")
+		infoRolling.handleRotation("%Y-%m-%d", "INFO")
+		debugRolling.handleRotation("%Y-%m-%d", "DEBUG")
 		rotationTime = time.Hour * 24
 	case HOUR_ROTATION:
-		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H")
+		infoRolling.handleRotation("%Y-%m-%d-%H", "INFO")
+		debugRolling.handleRotation("%Y-%m-%d-%H", "DEBUG")
 		rotationTime = time.Hour
 	case MIN_ROTATION:
-		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H-%M")
+		infoRolling.handleRotation("%Y-%m-%d-%H-%M", "INFO")
+		debugRolling.handleRotation("%Y-%m-%d-%H-%M", "DEBUG")
 		rotationTime = time.Minute
 	default:
-		infoFilenamePattern, debugFilenamePattern = handleRotation("%Y-%m-%d-%H")
+		infoRolling.handleRotation("%Y-%m-%d-%H", "INFO")
+		debugRolling.handleRotation("%Y-%m-%d-%H", "DEBUG")
 		rotationTime = time.Hour
 	}
 	core := zapcore.NewTee(
-		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(newRolling(infoFilenamePattern, rotationTime)), infoLevel),
-		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(newRolling(debugFilenamePattern, rotationTime)), debugLevel),
+		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(infoRolling.setupRolling(DEFAULT_INFO_NAME, rotationTime)), infoLevel),
+		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(debugRolling.setupRolling(DEFAULT_DEBUG_NAME, rotationTime)), debugLevel),
 	)
 	return zap.New(core, zap.AddCaller())
 }
 
-func handleRotation(timeFormat string) (infoPattern string, debugPattern string) {
-	infoDir, infoName := getPatternFromEnv("INFO")
-	infoPattern = fmt.Sprintf("%s/%s.%s", infoDir, timeFormat, infoName)
-
-	debugDir, debugName := getPatternFromEnv("DEBUG")
-	debugPattern = fmt.Sprintf("%s/%s.%s", debugDir, timeFormat, debugName)
-
-	return infoPattern, debugPattern
+func initRolling() *rolling {
+	return &rolling{
+		filename:        "",
+		symlinkFileName: "",
+		dir:             "",
+		pattern:         nil,
+		rotationTime:    time.Hour,
+		fileWriter:      nil,
+	}
 }
 
-func getPatternFromEnv(level string) (dirPattern, namePattern string) {
+func (r *rolling) handleRotation(timeFormat string, level string) {
+	dir, filename := r.getPatternFromEnv(level)
+	filenamePattern := fmt.Sprintf("%s.%s", timeFormat, filename)
+
+	r.dir = dir
+	r.filename = filenamePattern
+}
+
+func (r *rolling) getPatternFromEnv(level string) (dirPattern, namePattern string) {
 	switch level {
 	case "INFO":
 		dirPattern = strings.TrimSpace(os.Getenv("LOG_INFO_DIR"))
@@ -127,17 +143,18 @@ func getPatternFromEnv(level string) (dirPattern, namePattern string) {
 	return dirPattern, namePattern
 }
 
-func newRolling(filename string, rotationTime time.Duration) *rolling {
-	pattern, err := strftime.New(filename)
+func (r *rolling) setupRolling(symlinkFileName string, rotationTime time.Duration) *rolling {
+	pattern, err := strftime.New(r.filename)
 	if err != nil {
 		panic(err)
 	}
-	return &rolling{
-		filename:     filename,
-		pattern:      pattern,
-		rotationTime: rotationTime,
-		fileWriter:   nil,
-	}
+
+	r.symlinkFileName = symlinkFileName
+	r.pattern = pattern
+	r.rotationTime = rotationTime
+	r.fileWriter = nil
+
+	return r
 }
 
 func (r *rolling) Write(p []byte) (n int, err error) {
@@ -146,17 +163,22 @@ func (r *rolling) Write(p []byte) (n int, err error) {
 	if r.filename != newFilename {
 		if r.fileWriter != nil {
 			r.fileWriter.Close()
+			os.Remove(filepath.Join(r.dir, r.symlinkFileName))
 		}
 
-		dirname := filepath.Dir(newFilename)
-		if err := os.MkdirAll(dirname, 0755); err != nil {
+		if err := os.MkdirAll(r.dir, 0755); err != nil {
 			return 0, err
 		}
-		r.fileWriter, err = os.OpenFile(newFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		newFileStr := filepath.Join(r.dir, newFilename)
+		r.fileWriter, err = os.OpenFile(newFileStr, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return 0, err
 		}
 		r.filename = newFilename
+
+		if err := r.createSymlink(); err != nil {
+			fmt.Println("error: ", err) // no need to return
+		}
 	}
 
 	return r.fileWriter.Write(p)
