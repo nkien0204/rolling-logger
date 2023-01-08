@@ -163,7 +163,6 @@ func (r *rolling) Write(p []byte) (n int, err error) {
 	if r.filename != newFilename {
 		if r.fileWriter != nil {
 			r.fileWriter.Close()
-			os.Remove(filepath.Join(r.dir, r.symlinkFileName))
 		}
 
 		if err := os.MkdirAll(r.dir, 0755); err != nil {
@@ -177,7 +176,7 @@ func (r *rolling) Write(p []byte) (n int, err error) {
 		r.filename = newFilename
 
 		if err := r.createSymlink(); err != nil {
-			fmt.Println("error: ", err) // no need to return
+			fmt.Println("error:", err) // no need to return
 		}
 	}
 
