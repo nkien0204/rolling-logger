@@ -28,12 +28,14 @@ func main() {
 ```
 Some basic configurations are on the `.env` file. So make sure that it available to load this environment.
 
-Let's take a look at `.env`:
+**Let's take a look at `.env`:**
 - `LOG_ROTATION_TIME`: (`day`|`hour`|`min`) for "daily", "hourly" or "every minute" log file separation (default is `hour`).
-- `LOG_INFO_DIR`/`LOG_INFO_NAME`: location of log files which have the level are greater or equal to **INFO**.
-- `LOG_DEBUG_DIR`/`LOG_DEBUG_NAME`: location of log files which have the level less than **INFO**.
+- `LOG_INFO_DIR`/`LOG_INFO_NAME`: location of log files which have the level **greater or equal to INFO**.
+- `LOG_DEBUG_DIR`/`LOG_DEBUG_NAME`: location of log files which have the level **less than INFO**.
 
-Log level order: `DEBUG` < `INFO` < `WARN` < `ERROR` < `PANIC` < `FATAL`
+**Log level order:** `DEBUG` < `INFO` < `WARN` < `ERROR` < `PANIC` < `FATAL`
+
+**Tracking the latest log:** `logger.log` and `logger-debug.log` (in case using `DEBUG` log level)
 
 ## Dependencies
 - [joho/godotenv](https://github.com/joho/godotenv)
