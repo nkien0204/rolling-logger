@@ -1,0 +1,8 @@
+log:
+  log_rotation_time: "hour"
+
+  log_info_dir: "log"                 # Default is "log"
+  log_info_name: "logger.log"         # Save log level greater or equal INFO, default is "logger.log"
+
+  log_debug_dir: "log"                # Default is "log"
+  log_debug_name: "logger_debug.log"  # Save log level less than INFO, default is "logger-debug.log" 

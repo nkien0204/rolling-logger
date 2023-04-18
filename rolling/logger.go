@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/strftime"
+	"github.com/nkien0204/rolling-logger/configuration"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -118,22 +119,23 @@ func (r *rolling) handleRotation(timeFormat string, level string) {
 }
 
 func (r *rolling) getPatternFromEnv(level string) (dirPattern, namePattern string) {
+	configs := configuration.GetConfigs()
 	switch level {
 	case "INFO":
-		dirPattern = strings.TrimSpace(os.Getenv("LOG_INFO_DIR"))
+		dirPattern = strings.TrimSpace(configs.Log.LogInfoDir)
 		if dirPattern == "" {
 			dirPattern = DEFAULT_DIR
 		}
-		namePattern = strings.TrimSpace(os.Getenv("LOG_INFO_NAME"))
+		namePattern = strings.TrimSpace(configs.Log.LogInfoFileName)
 		if namePattern == "" {
 			namePattern = DEFAULT_INFO_NAME
 		}
 	case "DEBUG":
-		dirPattern = strings.TrimSpace(os.Getenv("LOG_DEBUG_DIR"))
+		dirPattern = strings.TrimSpace(configs.Log.LogDebugDir)
 		if dirPattern == "" {
 			dirPattern = DEFAULT_DIR
 		}
-		namePattern = strings.TrimSpace(os.Getenv("LOG_DEBUG_NAME"))
+		namePattern = strings.TrimSpace(configs.Log.LogDebugFileName)
 		if namePattern == "" {
 			namePattern = DEFAULT_DEBUG_NAME
 		}
