@@ -20,13 +20,14 @@ func main() {
 Some basic configurations are on the `config.yaml` file. So make sure that it available to load this configuration.
 
 **Let's take a look at `config.yaml`:**
+- `output`: choose output type between `console` and `file`
 - `log_rotation_time`: (`day`|`hour`|`min`) for "daily", "hourly" or "every minute" log file separation (default is `hour`).
-- `log_info_dir`/`log_info_name`: location of log files which have the level **greater or equal to INFO**.
-- `log_debug_dir`/`log_debug_name`: location of log files which have the level **less than INFO**.
+- `log_dir`/`log_file_name`: location of log files which match the level from `log_level_min` to `log_level_max`.
+- `log_level_min` <= log level <= `log_level_max`
 
-**Log level order:** `DEBUG` < `INFO` < `WARN` < `ERROR` < `PANIC` < `FATAL`
+**Log level order:** `debug` < `info` < `warn` < `error`
 
-**Tracking the latest log:** `logger.log` and `logger-debug.log` (in case using `DEBUG` log level)
+**Tracking the latest log:** `logger.log`
 
 ## Dependencies
 - [uber-go/zap](https://github.com/uber-go/zap)
