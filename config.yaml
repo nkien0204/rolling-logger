@@ -1,8 +1,13 @@
 log:
-  log_rotation_time: "hour"
+  output: "file" # whether output to "console" or "file", default is "console"
 
-  log_info_dir: "log"                 # Default is "log"
-  log_info_name: "logger.log"         # Save log level greater or equal INFO, default is "logger.log"
+  # min <= level <= max
+  # debug<info<warn<error
+  # default: min = max = info
+  log_level_min: "warn"
+  log_level_max: "error"
 
-  log_debug_dir: "log"                # Default is "log"
-  log_debug_name: "logger_debug.log"  # Save log level less than INFO, default is "logger-debug.log" 
+  # only apply when output = file
+  log_rotation_time: "hour" # day/hour/min, default is "hour"
+  log_dir: "log" # Default is "log"
+  log_file_name: "logger.log" # Symbolic link file, default is "logger.log"

@@ -23,7 +23,9 @@ const (
 	MIN_ROTATION  string = "min"
 )
 
-type rolling struct {
+type consoleLogger struct{}
+
+type fileLogger struct {
 	filename        string
 	symlinkFileName string
 	dir             string
@@ -46,6 +48,7 @@ func New() *zap.Logger {
 }
 
 func initLogger() *zap.Logger {
+	cfg := configuration.GetConfigs()
 	config := zap.Config{
 		Encoding: "json",
 		EncoderConfig: zapcore.EncoderConfig{
@@ -63,44 +66,83 @@ func initLogger() *zap.Logger {
 			},
 		},
 	}
-	infoLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-		return lvl >= zapcore.InfoLevel
-	})
-	debugLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-		return lvl < zapcore.InfoLevel
+	logLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= convertLogLevel(cfg.Log.LogLevelMin) && lvl <= convertLogLevel(cfg.Log.LogLevelMax)
 	})
 
-	var rotationTime time.Duration
-	infoRolling := initRolling()
-	debugRolling := initRolling()
-
-	switch os.Getenv("LOG_ROTATION_TIME") {
-	case DAY_ROTATION:
-		infoRolling.handleRotation("%Y-%m-%d", "INFO")
-		debugRolling.handleRotation("%Y-%m-%d", "DEBUG")
-		rotationTime = time.Hour * 24
-	case HOUR_ROTATION:
-		infoRolling.handleRotation("%Y-%m-%d-%H", "INFO")
-		debugRolling.handleRotation("%Y-%m-%d-%H", "DEBUG")
-		rotationTime = time.Hour
-	case MIN_ROTATION:
-		infoRolling.handleRotation("%Y-%m-%d-%H-%M", "INFO")
-		debugRolling.handleRotation("%Y-%m-%d-%H-%M", "DEBUG")
-		rotationTime = time.Minute
+	var core zapcore.Core
+	switch cfg.Log.Output {
+	case configuration.ConsoleOutputLog:
+		core = handleInitConsoleLogger(cfg, config, logLevel)
+	case configuration.FileOutputLog:
+		core = handleInitFileLogger(cfg, config, logLevel)
 	default:
-		infoRolling.handleRotation("%Y-%m-%d-%H", "INFO")
-		debugRolling.handleRotation("%Y-%m-%d-%H", "DEBUG")
-		rotationTime = time.Hour
+		core = handleInitConsoleLogger(cfg, config, logLevel)
 	}
-	core := zapcore.NewTee(
-		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(infoRolling.setupRolling(DEFAULT_INFO_NAME, rotationTime)), infoLevel),
-		zapcore.NewCore(zapcore.NewJSONEncoder(config.EncoderConfig), zapcore.AddSync(debugRolling.setupRolling(DEFAULT_DEBUG_NAME, rotationTime)), debugLevel),
-	)
 	return zap.New(core, zap.AddCaller())
 }
 
-func initRolling() *rolling {
-	return &rolling{
+func handleInitFileLogger(cfg *configuration.Cfg, config zap.Config, logLevel zap.LevelEnablerFunc) zapcore.Core {
+	var rotationTime time.Duration
+	rollingLogger := initRolling()
+
+	switch cfg.Log.RotationTime {
+	case DAY_ROTATION:
+		rollingLogger.handleRotation("%Y-%m-%d")
+		rotationTime = time.Hour * 24
+	case HOUR_ROTATION:
+		rollingLogger.handleRotation("%Y-%m-%d-%H")
+		rotationTime = time.Hour
+	case MIN_ROTATION:
+		rollingLogger.handleRotation("%Y-%m-%d-%H-%M")
+		rotationTime = time.Minute
+	default:
+		rollingLogger.handleRotation("%Y-%m-%d-%H")
+		rotationTime = time.Hour
+	}
+	core := zapcore.NewTee(
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(config.EncoderConfig),
+			zapcore.AddSync(rollingLogger.setupRolling(DEFAULT_INFO_NAME, rotationTime)),
+			logLevel,
+		),
+	)
+	return core
+}
+
+func handleInitConsoleLogger(cfg *configuration.Cfg, config zap.Config, logLevel zap.LevelEnablerFunc) zapcore.Core {
+	consoleLogger := initConsoleLogger()
+	core := zapcore.NewTee(
+		zapcore.NewCore(
+			zapcore.NewJSONEncoder(config.EncoderConfig),
+			zapcore.AddSync(consoleLogger),
+			logLevel,
+		),
+	)
+	return core
+}
+
+func convertLogLevel(logLevelStr string) zapcore.Level {
+	switch logLevelStr {
+	case zapcore.DebugLevel.String():
+		return zapcore.DebugLevel
+	case zapcore.InfoLevel.String():
+		return zapcore.InfoLevel
+	case zapcore.WarnLevel.String():
+		return zapcore.WarnLevel
+	case zapcore.ErrorLevel.String():
+		return zapcore.ErrorLevel
+	default:
+		return zapcore.InfoLevel
+	}
+}
+
+func initConsoleLogger() *consoleLogger {
+	return &consoleLogger{}
+}
+
+func initRolling() *fileLogger {
+	return &fileLogger{
 		filename:        "",
 		symlinkFileName: "",
 		dir:             "",
@@ -110,42 +152,31 @@ func initRolling() *rolling {
 	}
 }
 
-func (r *rolling) handleRotation(timeFormat string, level string) {
-	dir, filename := r.getPatternFromEnv(level)
+func (r *fileLogger) handleRotation(timeFormat string) {
+	dir, filename := r.getPatternFromEnv()
 	filenamePattern := fmt.Sprintf("%s.%s", timeFormat, filename)
 
 	r.dir = dir
 	r.filename = filenamePattern
 }
 
-func (r *rolling) getPatternFromEnv(level string) (dirPattern, namePattern string) {
+func (r *fileLogger) getPatternFromEnv() (dirPattern, namePattern string) {
 	configs := configuration.GetConfigs()
-	switch level {
-	case "INFO":
-		dirPattern = strings.TrimSpace(configs.Log.LogInfoDir)
-		if dirPattern == "" {
-			dirPattern = DEFAULT_DIR
-		}
-		namePattern = strings.TrimSpace(configs.Log.LogInfoFileName)
-		if namePattern == "" {
-			namePattern = DEFAULT_INFO_NAME
-		}
-	case "DEBUG":
-		dirPattern = strings.TrimSpace(configs.Log.LogDebugDir)
-		if dirPattern == "" {
-			dirPattern = DEFAULT_DIR
-		}
-		namePattern = strings.TrimSpace(configs.Log.LogDebugFileName)
-		if namePattern == "" {
-			namePattern = DEFAULT_DEBUG_NAME
-		}
-	default:
-		// No need to handle this case right now!
+	if configs == nil {
+		return
+	}
+	dirPattern = strings.TrimSpace(configs.Log.LogDir)
+	if dirPattern == "" {
+		dirPattern = DEFAULT_DIR
+	}
+	namePattern = strings.TrimSpace(configs.Log.LogFileName)
+	if namePattern == "" {
+		namePattern = DEFAULT_INFO_NAME
 	}
 	return dirPattern, namePattern
 }
 
-func (r *rolling) setupRolling(symlinkFileName string, rotationTime time.Duration) *rolling {
+func (r *fileLogger) setupRolling(symlinkFileName string, rotationTime time.Duration) *fileLogger {
 	pattern, err := strftime.New(r.filename)
 	if err != nil {
 		panic(err)
@@ -159,7 +190,7 @@ func (r *rolling) setupRolling(symlinkFileName string, rotationTime time.Duratio
 	return r
 }
 
-func (r *rolling) Write(p []byte) (n int, err error) {
+func (r *fileLogger) Write(p []byte) (n int, err error) {
 	base := time.Now().Truncate(r.rotationTime)
 	newFilename := r.pattern.FormatString(base)
 	if r.filename != newFilename {
@@ -183,4 +214,8 @@ func (r *rolling) Write(p []byte) (n int, err error) {
 	}
 
 	return r.fileWriter.Write(p)
+}
+
+func (c *consoleLogger) Write(p []byte) (n int, err error) {
+	return os.Stdout.Write(p)
 }
